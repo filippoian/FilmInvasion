@@ -36,7 +36,10 @@ app.get('/api/search', async (req, res) => {
   activeBrowsers++;
 
   try {
-    const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--disable-web-security'] });
+    const browser = await puppeteer.launch({ 
+      headless: 'new', 
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-web-security', '--no-zygote', '--single-process'] 
+    });
     const page = await browser.newPage();
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36');
     
@@ -88,7 +91,7 @@ app.get('/api/extract', async (req, res) => {
   try {
     const browser = await puppeteer.launch({ 
       headless: 'new',
-      args: ['--no-sandbox', '--disable-web-security', '--disable-features=IsolateOrigins,site-per-process']
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-web-security', '--no-zygote', '--single-process', '--disable-features=IsolateOrigins,site-per-process']
     });
     const page = await browser.newPage();
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36');
