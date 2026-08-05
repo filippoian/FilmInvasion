@@ -37,7 +37,7 @@ app.get('/api/search', async (req, res) => {
 
   try {
     const browser = await puppeteer.launch({ 
-      headless: false, 
+      headless: true, 
       args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-web-security', '--no-zygote', '--single-process'] 
     });
     const page = await browser.newPage();
@@ -90,7 +90,7 @@ app.get('/api/extract', async (req, res) => {
 
   try {
     const browser = await puppeteer.launch({ 
-      headless: false,
+      headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-web-security', '--no-zygote', '--single-process', '--disable-features=IsolateOrigins,site-per-process']
     });
     const page = await browser.newPage();

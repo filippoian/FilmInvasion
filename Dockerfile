@@ -11,4 +11,4 @@ RUN npm install
 COPY --chown=pptruser:pptruser . .
 
 EXPOSE 3001
-CMD ["xvfb-run", "-a", "--server-args=-screen 0 1024x768x24", "node", "server.js"]
+CMD ["node", "server.js"]
