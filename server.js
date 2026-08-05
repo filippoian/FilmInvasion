@@ -8,6 +8,7 @@ const rateLimit = require('express-rate-limit');
 puppeteer.use(StealthPlugin());
 
 const app = express();
+app.set('trust proxy', 1); // Necessario per Render per capire se siamo in https
 app.use(helmet());
 app.use(cors());
 app.use(express.json());
@@ -169,8 +170,10 @@ app.get('/api/extract', async (req, res) => {
     await browser.close();
     
     if (videoLink) {
-        console.log(`[EXTRACT] Estrazione conclusa con SUCCESSO!`);
-        res.json({ videoUrl: videoLink });
+        console.log(`[EXTRACT] Estrazione conclusa con SUCCESSO! Passaggio al Proxy...`);
+        // Modifica: Passiamo il link attraverso il nostro Proxy per bypassare il blocco IP!
+        const proxyUrl = `https://${req.get('host')}/api/proxy?url=${encodeURIComponent(videoLink)}`;
+        res.json({ videoUrl: proxyUrl });
     } else {
         console.log(`[EXTRACT] ❌ Estrazione FALLITA.`);
         res.status(404).json({ error: 'Nessun link video rilevato. Il sito usa un player troppo protetto (es. HLS tokenizzato).' });
@@ -180,6 +183,60 @@ app.get('/api/extract', async (req, res) => {
     res.status(500).json({ error: 'Errore durante l\'estrazione' });
   } finally {
     activeBrowsers--;
+  }
+});
+
+// ----------------------------------------------------
+// PROXY HLS (AGGIRAMENTO BLOCCO IP VIXCLOUD)
+// ----------------------------------------------------
+const { Readable } = require('stream');
+
+app.get('/api/proxy', async (req, res) => {
+  const targetUrl = req.query.url;
+  if (!targetUrl) return res.status(400).send('Url mancante');
+
+  try {
+    const response = await fetch(targetUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36',
+        'Referer': BASE_URL,
+        'Origin': BASE_URL
+      }
+    });
+
+    if (!response.ok) {
+       return res.status(response.status).send('Errore dal server video');
+    }
+
+    // Se è un file di playlist m3u8, dobbiamo riscrivere i link interni
+    if (targetUrl.includes('.m3u8')) {
+       let m3u8Content = await response.text();
+       const baseUrl = targetUrl.substring(0, targetUrl.lastIndexOf('/') + 1);
+
+       const lines = m3u8Content.split('\n');
+       const rewrittenLines = lines.map(line => {
+          if (line.trim() === '' || line.startsWith('#')) return line;
+          let fullUrl = line;
+          if (!line.startsWith('http')) {
+             fullUrl = baseUrl + line;
+          }
+          return `https://${req.get('host')}/api/proxy?url=${encodeURIComponent(fullUrl)}`;
+       });
+
+       res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
+       res.setHeader('Access-Control-Allow-Origin', '*');
+       return res.send(rewrittenLines.join('\n'));
+    }
+
+    // Se è un pezzo di video (.ts, .mp4, ecc.), lo scarichiamo e lo passiamo al telefono
+    res.setHeader('Content-Type', response.headers.get('content-type') || 'video/mp2t');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    
+    Readable.fromWeb(response.body).pipe(res);
+
+  } catch (err) {
+    console.error('[PROXY ERROR]', err.message);
+    res.status(500).send('Proxy error');
   }
 });
 
