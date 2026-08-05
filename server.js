@@ -183,7 +183,7 @@ app.get('/api/extract', async (req, res) => {
   }
 });
 
-const PORT = 3001;
-app.listen(PORT, () => {
-  console.log(`Backend StreamingCommunity in ascolto su http://localhost:${PORT}`);
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Backend StreamingCommunity in ascolto su porta ${PORT}`);
 });
