@@ -1,6 +1,7 @@
 FROM ghcr.io/puppeteer/puppeteer:latest
-# Crea la cartella con i permessi corretti per l'utente pptruser
+
 USER root
+RUN apt-get update && apt-get install -y xvfb && rm -rf /var/lib/apt/lists/*
 RUN mkdir -p /app && chown -R pptruser:pptruser /app
 USER pptruser
 
@@ -10,4 +11,4 @@ RUN npm install
 COPY --chown=pptruser:pptruser . .
 
 EXPOSE 3001
-CMD ["node", "server.js"]
+CMD ["xvfb-run", "--server-args=-screen 0 1024x768x24", "node", "server.js"]
