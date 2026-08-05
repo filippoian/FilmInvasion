@@ -208,18 +208,36 @@ app.get('/api/proxy', async (req, res) => {
        return res.status(response.status).send('Errore dal server video');
     }
 
-    // Se è un file di playlist m3u8, dobbiamo riscrivere i link interni
-    if (targetUrl.includes('.m3u8')) {
+    const contentType = response.headers.get('content-type') || '';
+
+    // Se è un file di playlist m3u8 (a volte arriva come test/plain o mpegurl)
+    if (targetUrl.includes('.m3u8') || contentType.includes('mpegurl') || contentType.includes('application/vnd.apple.mpegurl')) {
        let m3u8Content = await response.text();
-       const baseUrl = targetUrl.substring(0, targetUrl.lastIndexOf('/') + 1);
+       
+       // Scomponiamo l'url base per ricavare la cartella del file corrente
+       const urlObj = new URL(targetUrl);
+       const baseUrl = urlObj.origin + urlObj.pathname.substring(0, urlObj.pathname.lastIndexOf('/') + 1);
 
        const lines = m3u8Content.split('\n');
        const rewrittenLines = lines.map(line => {
-          if (line.trim() === '' || line.startsWith('#')) return line;
-          let fullUrl = line;
-          if (!line.startsWith('http')) {
-             fullUrl = baseUrl + line;
+          let trimmed = line.trim();
+          if (trimmed === '' || trimmed.startsWith('#')) return line; // Lasciamo intatti i commenti HLS
+          
+          let fullUrl = trimmed;
+          // Se la riga è un link relativo (es: segment1.ts), dobbiamo farlo diventare assoluto
+          if (!fullUrl.startsWith('http')) {
+             if (fullUrl.startsWith('/')) {
+                fullUrl = urlObj.origin + fullUrl;
+             } else {
+                fullUrl = baseUrl + fullUrl;
+             }
+             // Preserviamo eventuali query string del file m3u8 originale (come i token di vixcloud) se il segmento non ne ha
+             if (!fullUrl.includes('?') && urlObj.search) {
+                fullUrl += urlObj.search;
+             }
           }
+          
+          // Diciamo al telefono di NON scaricare questo pezzo originale, ma di richiederlo al nostro proxy!
           return `https://${req.get('host')}/api/proxy?url=${encodeURIComponent(fullUrl)}`;
        });
 
@@ -228,11 +246,14 @@ app.get('/api/proxy', async (req, res) => {
        return res.send(rewrittenLines.join('\n'));
     }
 
-    // Se è un pezzo di video (.ts, .mp4, ecc.), lo scarichiamo e lo passiamo al telefono
-    res.setHeader('Content-Type', response.headers.get('content-type') || 'video/mp2t');
+    // Altrimenti è un frammento video reale (.ts, .mp4, audio) - Lo passiamo come un tubo puro
+    res.setHeader('Content-Type', contentType || 'video/mp2t');
     res.setHeader('Access-Control-Allow-Origin', '*');
     
-    Readable.fromWeb(response.body).pipe(res);
+    // Per bypassare problemi di chunking express
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    res.send(buffer);
 
   } catch (err) {
     console.error('[PROXY ERROR]', err.message);
